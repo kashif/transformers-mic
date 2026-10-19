@@ -74,10 +74,11 @@ the contract's inputs move the outputs (the sensitivity gate).
    ```
 
    `copy_assets` names extra files copied byte for byte from the pinned source.
-   `preserve_frozen_prefixes` copies matching parameters only when they have
-   `requires_grad=False`; missing names and shape changes fail the build. Their
-   source hashes are included in the fixture key and build record. The planner
-   cannot add these options; review and edit the recipe yourself.
+   `preserve_frozen_prefixes` copies matching frozen parameters and persistent
+   buffers only when they have `requires_grad=False`; missing names and shape
+   changes fail the build. Their source hashes are included in the fixture key
+   and build record. The planner cannot add these options; review and edit the
+   recipe yourself.
 
 4. **Record the candidate expectations.**
 

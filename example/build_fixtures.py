@@ -19,8 +19,8 @@ For each fixture in a contract's manifest that has a `build` recipe:
 3. Copy. Every non-weight file of the source checkpoint (tokenizer,
    processor, generation config) is copied unchanged. A recipe can explicitly
    include a processor asset with a weight-like extension and preserve selected
-   frozen parameters from the pinned checkpoint. Other weights are new. The
-   weights mirror the real checkpoint's tensor names:
+   frozen parameters and persistent buffers from the pinned checkpoint. Other
+   weights are new. The weights mirror the real checkpoint's tensor names:
    parameters the real checkpoint lacks are dropped from the fixture too, so
    loading initializes them as it does for users, and the build checks that
    the fixture reports the same missing parameters.
@@ -210,7 +210,7 @@ def as_dtype(batch, dtype):
 
 
 def restore_frozen(model, source, repo, revision, recipe):
-    """Copy explicitly selected frozen parameters from the pinned checkpoint."""
+    """Copy explicitly selected frozen parameters and persistent buffers from the pinned checkpoint."""
     prefixes = recipe.get("preserve_frozen_prefixes", [])
     if not prefixes:
         return None
@@ -218,14 +218,16 @@ def restore_frozen(model, source, repo, revision, recipe):
     from safetensors import safe_open
 
     selected = {}
-    for name, parameter in model.named_parameters():
+    for name, parameter in model.state_dict(keep_vars=True).items():
+        if not isinstance(parameter, torch.Tensor):
+            continue
         if any(name.startswith(prefix) for prefix in prefixes):
             if parameter.requires_grad:
                 raise ValueError(f"Requested fixed tensor is trainable: {name}")
             selected[name] = parameter
     for prefix in prefixes:
         if not any(name.startswith(prefix) for name in selected):
-            raise ValueError(f"No frozen parameters match {prefix!r}")
+            raise ValueError(f"No frozen tensors match {prefix!r}")
     index = source / "model.safetensors.index.json"
     weight_map = json.loads(index.read_text())["weight_map"] if index.exists() else {}
     files = {weight_map.get(name, "model.safetensors") for name in selected}
@@ -237,10 +239,10 @@ def restore_frozen(model, source, repo, revision, recipe):
                 if weight_map.get(name, "model.safetensors") != filename:
                     continue
                 if name not in checkpoint.keys():
-                    raise ValueError(f"Pinned checkpoint lacks frozen parameter {name}")
+                    raise ValueError(f"Pinned checkpoint lacks frozen tensor {name}")
                 tensor = checkpoint.get_tensor(name)
                 if tensor.shape != parameter.shape:
-                    raise ValueError(f"Frozen parameter {name} has shape {tuple(tensor.shape)}, expected {tuple(parameter.shape)}")
+                    raise ValueError(f"Frozen tensor {name} has shape {tuple(tensor.shape)}, expected {tuple(parameter.shape)}")
                 parameter.copy_(tensor)
                 hashes[name] = hashlib.sha256(tensor.contiguous().view(torch.uint8).numpy().tobytes()).hexdigest()
     return hashes

@@ -23,13 +23,18 @@ def test_weight_named_processor_asset_is_copied(tmp_path):
     assert "model.safetensors" not in build_fixtures.copied_files(tmp_path, recipe)
 
 
-def test_selected_frozen_parameters_survive_random_initialization(
-    tmp_path, monkeypatch
+@pytest.mark.parametrize("as_buffer", [False, True])
+def test_selected_frozen_tensors_survive_random_initialization(
+    tmp_path, monkeypatch, as_buffer
 ):
     class Model(torch.nn.Module):
         def __init__(self):
             super().__init__()
-            self.geometry = torch.nn.Parameter(torch.zeros(2), requires_grad=False)
+            if as_buffer:
+                self.register_buffer("geometry", torch.zeros(2))
+            else:
+                self.geometry = torch.nn.Parameter(torch.zeros(2), requires_grad=False)
+            self.register_buffer("geometry_scratch", torch.zeros(2), persistent=False)
             self.weights = torch.nn.Parameter(torch.zeros(2))
 
     source = tmp_path / "source"
@@ -51,6 +56,7 @@ def test_selected_frozen_parameters_survive_random_initialization(
         {"preserve_frozen_prefixes": ["geometry"]},
     )
     assert model.geometry.tolist() == [2.0, 3.0]
+    assert model.geometry_scratch.tolist() == [0.0, 0.0]
     assert model.weights.tolist() == [0.0, 0.0]
     assert (
         hashes["geometry"]

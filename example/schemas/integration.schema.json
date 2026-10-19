@@ -100,7 +100,7 @@
         "minItems": 1,
         "uniqueItems": true,
         "items": {"type": "string", "minLength": 1},
-        "description": "copy matching requires_grad=False parameters from the pinned checkpoint after random initialization"
+        "description": "copy matching requires_grad=False parameters and persistent buffers from the pinned checkpoint after random initialization"
        },
        "gate_tolerance": {
         "type": "number",
